@@ -79,7 +79,7 @@
         const auth = firebase.auth(); // Inicializamos Auth
         const DOC_ID = "adventureBookData";
 
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo, memo } = React;
 
         // --- ICONOS SVG ---
         const Icon = ({ path, className, ...props }) => (
@@ -125,19 +125,37 @@
 
         // --- COMPONENTES ---
 
-        const FloatingBackground = () => {
+        // EMOJIS ESTÁTICOS Y OPTIMIZADOS (No se re-calculan en cada render)
+        const FloatingBackground = memo(() => {
           const icons = ["🍬", "🐛", "🍫", "🥐", "🍰", "🍪", "🍝", "🥩", "🍏", "☕", "🍔", "🧋", "🥣", "🍮", "🟠"];
+          
+          // Calculamos las posiciones SOLO UNA VEZ al montar el componente
+          const staticPositions = useMemo(() => {
+             return Array.from({ length: 15 }).map((_, i) => ({
+                icon: icons[i % icons.length],
+                top: Math.random() * 100,
+                left: Math.random() * 100,
+                rotation: Math.random() * 360,
+                size: 20 + Math.random() * 40
+             }));
+          }, []);
+
           return (
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-30">
-              {icons.map((icon, index) => (
-                <div key={index} className="absolute text-4xl animate-pulse"
-                  style={{ top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%`, transform: `rotate(${Math.random() * 360}deg)`, animationDuration: `${3 + Math.random() * 5}s`, fontSize: `${20 + Math.random() * 40}px` }}>
-                  {icon}
+              {staticPositions.map((item, index) => (
+                <div key={index} className="absolute select-none"
+                  style={{ 
+                      top: `${item.top}%`, 
+                      left: `${item.left}%`, 
+                      transform: `rotate(${item.rotation}deg)`, 
+                      fontSize: `${item.size}px` 
+                  }}>
+                  {item.icon}
                 </div>
               ))}
             </div>
           );
-        };
+        });
 
         const MainWrapper = ({ children, backgroundImage }) => (
           <div className={`min-h-screen flex flex-col items-center justify-center relative overflow-x-hidden font-sans transition-colors duration-500 ${backgroundImage ? 'animated-bg' : ''}`}
@@ -385,8 +403,6 @@
               setUser(currentUser);
               if (currentUser) {
                   setShowPasswordModal(false);
-                  // Opcional: abrir admin automáticamente si se loguea
-                  // setShowAdmin(true);
               }
             });
             return () => unsubscribe();
@@ -444,6 +460,7 @@
 
           const handleLogout = () => {
               auth.signOut();
+              setUser(null); 
               setShowAdmin(false);
           };
 
@@ -565,95 +582,174 @@
                   </div>
                 )}
 
-                {/* PANEL ADMIN (SOLO VISIBLE SI USER EXISTE) */}
+                {/* PANEL ADMIN OPTIMIZADO */}
                 {showAdmin && user && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-                      <div className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0 rounded-t-2xl">
-                          <h3 className="font-bold flex items-center gap-2"><Icons.Edit3 className="w-5 h-5" /> Admin Panel</h3>
-                          <div className="flex items-center gap-2">
-                              <span className="text-xs opacity-60 hidden sm:inline">{user.email}</span>
-                              <button onClick={() => setShowAdmin(false)}><Icons.X className="w-6 h-6" /></button>
+                  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                      {/* Cabecera Admin */}
+                      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 flex justify-between items-center shrink-0">
+                          <h3 className="font-bold flex items-center gap-2 text-lg"><Icons.Edit3 className="w-5 h-5" /> Editor de Historia</h3>
+                          <div className="flex items-center gap-3">
+                              <span className="text-xs opacity-60 hidden sm:inline bg-slate-700 px-2 py-1 rounded">{user.email}</span>
+                              <button onClick={() => setShowAdmin(false)} className="hover:bg-slate-700 p-1 rounded-full"><Icons.X className="w-6 h-6" /></button>
                           </div>
                       </div>
                       
-                      <div className="bg-yellow-100 p-2 text-center text-xs text-yellow-800 font-bold border-b border-yellow-200">
-                         ⚠️ Recuerda dar clic en "Guardar Cambios" abajo para subir todo a la nube.
+                      <div className="bg-yellow-50 p-2 text-center text-xs text-yellow-800 font-bold border-b border-yellow-100 flex items-center justify-center gap-2">
+                         <span>⚠️ No olvides guardar los cambios al finalizar.</span>
                       </div>
 
-                      <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar text-slate-800">
-                        <section className="space-y-4 border-b pb-6">
-                            <h4 className="font-bold text-green-800">General</h4>
+                      <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar text-slate-800 bg-slate-50">
+                        
+                        {/* SECCIÓN GENERAL */}
+                        <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                            <h4 className="font-bold text-green-800 border-b pb-2 mb-4 text-lg">1. Datos Generales</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input type="text" name="title" value={data.intro.title} onChange={handleIntroChange} className="border p-2 rounded" placeholder="Título" />
-                                <input type="date" value={data.startDate} onChange={(e) => setData({...data, startDate: e.target.value})} className="border p-2 rounded" />
-                                <textarea name="subtitle" rows={2} value={data.intro.subtitle} onChange={handleIntroChange} className="w-full border p-2 rounded md:col-span-2" placeholder="Subtítulo"></textarea>
-                                <div className="md:col-span-2 bg-blue-50 p-3 rounded flex justify-between items-center">
-                                    <span className="text-xs font-bold text-blue-800">Fondo de Pantalla</span>
-                                    <label className="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold cursor-pointer"><Icons.ImageIcon className="w-4 h-4 inline mr-2" /> Subir Img <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, (url) => setData({...data, backgroundImage: url}))} className="hidden" /></label>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Título Principal</label>
+                                    <input type="text" name="title" value={data.intro.title} onChange={handleIntroChange} className="border border-slate-300 p-2 rounded w-full focus:ring-2 focus:ring-green-500 outline-none" placeholder="Ej: Nuestra Historia" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Fecha de Inicio</label>
+                                    <input type="date" value={data.startDate} onChange={(e) => setData({...data, startDate: e.target.value})} className="border border-slate-300 p-2 rounded w-full focus:ring-2 focus:ring-green-500 outline-none" />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Frase Subtítulo</label>
+                                    <textarea name="subtitle" rows={2} value={data.intro.subtitle} onChange={handleIntroChange} className="w-full border border-slate-300 p-2 rounded focus:ring-2 focus:ring-green-500 outline-none" placeholder="Escribe algo bonito..."></textarea>
+                                </div>
+                                <div className="md:col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100 flex justify-between items-center">
+                                    <div>
+                                        <span className="text-sm font-bold text-blue-800 block">Fondo de Pantalla</span>
+                                        <span className="text-xs text-blue-600">Cambia la imagen de fondo de toda la app</span>
+                                    </div>
+                                    <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition shadow-md"><Icons.ImageIcon className="w-4 h-4 inline mr-2" /> Subir Fondo <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, (url) => setData({...data, backgroundImage: url}))} className="hidden" /></label>
                                 </div>
                             </div>
                         </section>
-                        <section className="space-y-4 border-b pb-6">
-                            <div className="flex justify-between"><h4>Sobres</h4><button onClick={addEnvelope} className="bg-amber-500 text-white px-2 rounded text-sm">+ Nuevo</button></div>
-                            <div className="grid grid-cols-1 gap-2">{data.envelopes.map(env => (
-                                <div key={env.id} className="border p-2 rounded flex flex-col gap-2 relative">
-                                    <button onClick={() => removeEnvelope(env.id)} className="absolute top-2 right-2 text-red-500"><Icons.Trash2 className="w-4 h-4" /></button>
-                                    <input value={env.title} onChange={(e) => updateEnvelope(env.id, 'title', e.target.value)} className="border p-1 text-sm" placeholder="Cuándo abrir..." />
-                                    <textarea value={env.content} onChange={(e) => updateEnvelope(env.id, 'content', e.target.value)} className="border p-1 text-sm" placeholder="Contenido..." />
-                                </div>
-                            ))}</div>
-                        </section>
-                        <section className="space-y-4 border-b pb-6">
-                            <div className="flex justify-between"><h4>Cupones</h4><button onClick={addCoupon} className="bg-pink-500 text-white px-2 rounded text-sm">+ Nuevo</button></div>
-                            <div className="grid grid-cols-2 gap-2">{data.coupons.map(c => (
-                                <div key={c.id} className="border p-2 rounded flex items-center gap-2">
-                                    <input value={c.title} onChange={(e) => updateCoupon(c.id, e.target.value)} className="border p-1 w-full text-sm" />
-                                    <button onClick={() => removeCoupon(c.id)} className="text-red-500"><Icons.Trash2 className="w-4 h-4" /></button>
-                                </div>
-                            ))}</div>
-                        </section>
-                        <section className="space-y-4">
-                             <div className="flex justify-between"><h4>Libro & Música</h4><button onClick={addPage} className="bg-green-600 text-white px-3 py-1 rounded text-sm">+ Página</button></div>
-                             {data.pages.map((page, index) => (
-                                <div key={index} className="border p-4 rounded relative shadow-sm bg-gray-50">
-                                    <button onClick={() => removePage(index)} className="absolute top-2 right-2 text-red-500"><Icons.Trash2 className="w-4 h-4" /></button>
-                                    <span className="text-xs bg-gray-200 px-2 rounded font-bold">Página {index + 1}</span>
-                                    <div className="grid grid-cols-2 gap-4 mt-2">
-                                        <div className="flex flex-col gap-2">
-                                            <input value={page.title} onChange={(e) => handlePageChange(index, 'title', e.target.value)} className="border p-1 text-sm font-bold" placeholder="Título Cap" />
-                                            <textarea value={page.body} onChange={(e) => handlePageChange(index, 'body', e.target.value)} className="border p-1 text-sm h-20" placeholder="Texto..." />
+
+                        {/* SECCIÓN PÁGINAS (OPTIMIZADA) */}
+                        <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                             <div className="flex justify-between items-center border-b pb-2 mb-4">
+                                 <h4 className="font-bold text-green-800 text-lg">2. Páginas del Libro</h4>
+                                 <button onClick={addPage} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md transition flex items-center gap-1">+ Nueva Página</button>
+                             </div>
+                             
+                             <div className="space-y-6">
+                                 {data.pages.map((page, index) => (
+                                    <div key={index} className="border border-slate-200 p-4 rounded-xl relative bg-slate-50 hover:border-green-300 transition-colors">
+                                        <div className="absolute top-3 right-3 flex gap-2">
+                                            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded font-bold">Pág {index + 1}</span>
+                                            <button onClick={() => removePage(index)} className="text-red-400 hover:text-red-600 transition"><Icons.Trash2 className="w-5 h-5" /></button>
                                         </div>
-                                        <div className="flex flex-col gap-2 bg-white p-2 rounded border">
-                                            <input value={page.song.title} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'title')} className="border p-1 text-xs" placeholder="Canción" />
-                                            <input value={page.song.artist} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'artist')} className="border p-1 text-xs" placeholder="Artista" />
-                                            <input value={page.song.spotifyUrl || ""} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'spotifyUrl')} className="border p-1 text-[10px]" placeholder="Link Spotify" />
-                                            <input value={page.song.youtubeUrl || ""} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'youtubeUrl')} className="border p-1 text-[10px]" placeholder="Link YouTube" />
-                                            <input value={page.song.youtubeMusicUrl || ""} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'youtubeMusicUrl')} className="border p-1 text-[10px]" placeholder="Link YouTube Music" />
-                                            <label className="cursor-pointer text-xs text-blue-600 border-t pt-1 font-bold block mt-1">📸 Foto Página <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, (url) => handlePageChange(index, 'imageUrl', url))} className="hidden" /></label>
-                                            <label className="cursor-pointer text-xs text-green-600 font-bold">🎵 Portada Canción <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, (url) => handlePageChange(index, 'song', url, 'coverUrl'))} className="hidden" /></label>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                                            {/* Columna Izquierda: Texto e Imagen Principal */}
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Título del Capítulo</label>
+                                                    <input value={page.title} onChange={(e) => handlePageChange(index, 'title', e.target.value)} className="w-full border p-2 rounded focus:ring-1 focus:ring-green-500 outline-none font-bold" placeholder="Ej: Nuestro Primer Viaje" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-500 mb-1">Historia / Texto</label>
+                                                    <textarea value={page.body} onChange={(e) => handlePageChange(index, 'body', e.target.value)} className="w-full border p-2 rounded focus:ring-1 focus:ring-green-500 outline-none h-32 text-sm" placeholder="Escribe aquí el recuerdo..." />
+                                                </div>
+                                                <div className="bg-white p-2 rounded border border-dashed border-slate-300">
+                                                    <label className="cursor-pointer text-xs text-blue-600 font-bold flex items-center gap-2 hover:bg-blue-50 p-2 rounded transition">
+                                                        <Icons.ImageIcon className="w-4 h-4" /> 
+                                                        {page.imageUrl ? "Cambiar Foto del Recuerdo" : "Subir Foto del Recuerdo"}
+                                                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, (url) => handlePageChange(index, 'imageUrl', url))} className="hidden" />
+                                                    </label>
+                                                    {page.imageUrl && <div className="h-20 w-full mt-2 bg-slate-100 rounded overflow-hidden"><img src={page.imageUrl} className="w-full h-full object-cover opacity-70" /></div>}
+                                                </div>
+                                            </div>
+
+                                            {/* Columna Derecha: Música */}
+                                            <div className="bg-white p-4 rounded-lg border border-slate-200">
+                                                <h5 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Icons.Music className="w-4 h-4" /> Canción de fondo</h5>
+                                                <div className="space-y-2">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <input value={page.song.title} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'title')} className="border p-2 rounded text-xs bg-slate-50" placeholder="Título Canción" />
+                                                        <input value={page.song.artist} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'artist')} className="border p-2 rounded text-xs bg-slate-50" placeholder="Artista" />
+                                                    </div>
+                                                    <input value={page.song.spotifyUrl || ""} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'spotifyUrl')} className="w-full border p-2 rounded text-[10px] text-green-700 font-mono bg-green-50 placeholder-green-300" placeholder="Pegar Link Spotify" />
+                                                    <input value={page.song.youtubeUrl || ""} onChange={(e) => handlePageChange(index, 'song', e.target.value, 'youtubeUrl')} className="w-full border p-2 rounded text-[10px] text-red-700 font-mono bg-red-50 placeholder-red-300" placeholder="Pegar Link YouTube" />
+                                                    
+                                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t">
+                                                        <div className="w-10 h-10 bg-slate-100 rounded overflow-hidden shrink-0 border">
+                                                            {page.song.coverUrl && <img src={page.song.coverUrl} className="w-full h-full object-cover" />}
+                                                        </div>
+                                                        <label className="cursor-pointer text-xs text-slate-600 font-bold hover:text-slate-900 underline">
+                                                            Subir Carátula
+                                                            <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, (url) => handlePageChange(index, 'song', url, 'coverUrl'))} className="hidden" />
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                             ))}
+                                 ))}
+                             </div>
                         </section>
-                        <section className="space-y-4 pt-4 border-t">
-                           <div className="flex justify-between"><h4>Álbum Final</h4><label className="bg-yellow-600 text-white px-3 py-1 rounded text-sm cursor-pointer">+ Foto <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, addAlbumPhoto)} className="hidden" /></label></div>
-                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                        {/* SECCIÓN SOBRES Y CUPONES (Agrupados) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-amber-800">3. Sobres "Abrir cuando..."</h4>
+                                    <button onClick={addEnvelope} className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 py-1 rounded text-xs font-bold">+ Agregar</button>
+                                </div>
+                                <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                    {data.envelopes.map(env => (
+                                    <div key={env.id} className="border border-amber-100 p-3 rounded bg-amber-50/50 flex flex-col gap-2 relative group">
+                                        <button onClick={() => removeEnvelope(env.id)} className="absolute top-2 right-2 text-red-300 hover:text-red-500"><Icons.X className="w-4 h-4" /></button>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-amber-400">Título (Abrir cuando...)</span>
+                                            <input value={env.title} onChange={(e) => updateEnvelope(env.id, 'title', e.target.value)} className="w-full border-b border-amber-200 bg-transparent py-1 text-sm font-bold text-amber-900 focus:outline-none" placeholder="estés triste..." />
+                                        </div>
+                                        <textarea value={env.content} onChange={(e) => updateEnvelope(env.id, 'content', e.target.value)} className="w-full border p-2 rounded text-sm bg-white h-16 resize-none focus:ring-1 focus:ring-amber-300 outline-none" placeholder="Escribe la carta aquí..." />
+                                    </div>
+                                ))}
+                                </div>
+                            </section>
+
+                            <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-pink-800">4. Cupones</h4>
+                                    <button onClick={addCoupon} className="bg-pink-100 text-pink-700 hover:bg-pink-200 px-2 py-1 rounded text-xs font-bold">+ Agregar</button>
+                                </div>
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                    {data.coupons.map(c => (
+                                    <div key={c.id} className="border border-pink-100 p-2 rounded bg-pink-50/50 flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center shrink-0 text-pink-400">🎟️</div>
+                                        <input value={c.title} onChange={(e) => updateCoupon(c.id, e.target.value)} className="w-full bg-transparent border-none focus:ring-0 text-pink-900 font-medium text-sm" placeholder="Vale por..." />
+                                        <button onClick={() => removeCoupon(c.id)} className="text-red-300 hover:text-red-500"><Icons.X className="w-4 h-4" /></button>
+                                    </div>
+                                ))}
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* SECCIÓN ÁLBUM */}
+                        <section className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                           <div className="flex justify-between items-center mb-4">
+                               <h4 className="font-bold text-slate-700">5. Álbum de Fotos Extra</h4>
+                               <label className="bg-slate-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-sm cursor-pointer shadow-md transition font-bold">+ Subir Foto <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, addAlbumPhoto)} className="hidden" /></label>
+                           </div>
+                           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                              {data.albumPhotos.map((p, i) => {
                                const url = typeof p === 'string' ? p : p.url;
                                const caption = typeof p === 'string' ? "" : p.caption;
                                return (
-                                 <div key={i} className="relative group border p-2 rounded flex flex-col gap-2">
-                                     <div className="relative h-24 w-full">
-                                         <img src={url} className="w-full h-full object-cover rounded" />
-                                         <button onClick={() => removeAlbumPhoto(i)} className="absolute inset-0 bg-black/50 text-white flex justify-center items-center opacity-0 group-hover:opacity-100"><Icons.Trash2 className="w-4 h-4" /></button>
+                                 <div key={i} className="relative group border p-1 rounded bg-white shadow-sm hover:shadow-md transition">
+                                     <div className="relative aspect-square w-full rounded overflow-hidden bg-slate-100">
+                                         <img src={url} className="w-full h-full object-cover" />
+                                         <button onClick={() => removeAlbumPhoto(i)} className="absolute inset-0 bg-red-900/60 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"><Icons.Trash2 className="w-6 h-6" /></button>
                                      </div>
                                      <input 
                                        type="text" 
                                        value={caption} 
                                        onChange={(e) => handleAlbumCaptionChange(i, e.target.value)} 
-                                       className="w-full border p-1 text-xs rounded" 
+                                       className="w-full border-t p-1 text-[10px] text-center focus:bg-yellow-50 outline-none" 
                                        placeholder="Descripción..." 
                                      />
                                  </div>
@@ -662,10 +758,12 @@
                            </div>
                         </section>
                       </div>
-                      <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex gap-3">
-                        <button onClick={handleLogout} className="bg-red-50 text-red-600 px-4 py-3 rounded-xl font-bold hover:bg-red-100 flex items-center gap-2"><Icons.LogOut className="w-5 h-5" /> Salir</button>
-                        <button onClick={saveDataToFirebase} disabled={saving} className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 flex justify-center items-center gap-2">
-                             {saving ? "Guardando..." : <><Icons.Save className="w-5 h-5" /> GUARDAR CAMBIOS</>}
+
+                      {/* Footer Admin */}
+                      <div className="p-4 border-t bg-slate-100 flex gap-3 shrink-0">
+                        <button onClick={handleLogout} className="bg-white border border-red-200 text-red-600 px-4 py-3 rounded-xl font-bold hover:bg-red-50 flex items-center gap-2 transition"><Icons.LogOut className="w-5 h-5" /> Salir</button>
+                        <button onClick={saveDataToFirebase} disabled={saving} className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-[1.01] transition flex justify-center items-center gap-2 disabled:opacity-70 disabled:scale-100">
+                             {saving ? <><div className="loader w-5 h-5 border-2 border-white/30 border-t-white"></div> Guardando...</> : <><Icons.Save className="w-5 h-5" /> GUARDAR TODOS LOS CAMBIOS</>}
                         </button>
                       </div>
                     </div>
